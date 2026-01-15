@@ -1,0 +1,17 @@
+.{
+    .name = "zcode",
+    .version = "0.1.0",
+    .minimum_zig_version = "0.13.0",
+    .dependencies = .{
+        .vaxis = .{
+            .url = "git+https://github.com/rockorager/libvaxis#v0.13.1",
+            .hash = "12200000000000000000000000000000000000000000000000000000000000000000",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "test",
+    },
+}
