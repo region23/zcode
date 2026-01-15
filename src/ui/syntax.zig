@@ -61,7 +61,7 @@ pub fn tokenize(code: []const u8, lang: Language, allocator: std.mem.Allocator) 
 }
 
 fn tokenizePlain(code: []const u8, allocator: std.mem.Allocator) ![]Token {
-    var tokens = std.ArrayList(Token).init(allocator);
+    var tokens = std.array_list.AlignedManaged(Token, null).init(allocator);
     try tokens.append(.{ .text = code, .type = .plain });
     return tokens.toOwnedSlice();
 }
@@ -75,7 +75,7 @@ fn tokenizeZig(code: []const u8, allocator: std.mem.Allocator) ![]Token {
         "usingnamespace", "test", "and", "or", "null", "undefined", "true", "false",
     };
 
-    var tokens = std.ArrayList(Token).init(allocator);
+    var tokens = std.array_list.AlignedManaged(Token, null).init(allocator);
     var i: usize = 0;
 
     while (i < code.len) {
@@ -173,7 +173,7 @@ fn tokenizePython(code: []const u8, allocator: std.mem.Allocator) ![]Token {
         "and", "or", "not", "in", "is",
     };
 
-    var tokens = std.ArrayList(Token).init(allocator);
+    var tokens = std.array_list.AlignedManaged(Token, null).init(allocator);
     var i: usize = 0;
 
     while (i < code.len) {
@@ -278,7 +278,7 @@ fn tokenizeJavaScript(code: []const u8, allocator: std.mem.Allocator) ![]Token {
         "false",   "null",     "undefined", "yield",  "static",  "super",
     };
 
-    var tokens = std.ArrayList(Token).init(allocator);
+    var tokens = std.array_list.AlignedManaged(Token, null).init(allocator);
     var i: usize = 0;
 
     while (i < code.len) {
@@ -374,7 +374,7 @@ fn tokenizeJavaScript(code: []const u8, allocator: std.mem.Allocator) ![]Token {
 }
 
 fn tokenizeJson(code: []const u8, allocator: std.mem.Allocator) ![]Token {
-    var tokens = std.ArrayList(Token).init(allocator);
+    var tokens = std.array_list.AlignedManaged(Token, null).init(allocator);
     var i: usize = 0;
 
     while (i < code.len) {
@@ -443,14 +443,14 @@ pub const CodeBlock = struct {
 };
 
 pub fn detectCodeBlocks(text: []const u8, allocator: std.mem.Allocator) ![]CodeBlock {
-    var blocks = std.ArrayList(CodeBlock).init(allocator);
+    var blocks = std.array_list.AlignedManaged(CodeBlock, null).init(allocator);
     var lines = std.mem.splitSequence(u8, text, "\n");
 
     var line_num: usize = 0;
     var in_code_block = false;
     var block_lang: Language = .unknown;
     var block_start: usize = 0;
-    var block_lines = std.ArrayList([]const u8).init(allocator);
+    var block_lines = std.array_list.AlignedManaged([]const u8, null).init(allocator);
     defer block_lines.deinit();
 
     while (lines.next()) |line| {

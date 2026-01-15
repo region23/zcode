@@ -12,12 +12,12 @@ pub const StreamEvent = struct {
 };
 
 pub const SSEParser = struct {
-    buffer: std.ArrayList(u8),
+    buffer: std.array_list.AlignedManaged(u8, null),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) SSEParser {
         return .{
-            .buffer = std.ArrayList(u8).init(allocator),
+            .buffer = std.array_list.AlignedManaged(u8, null).init(allocator),
             .allocator = allocator,
         };
     }

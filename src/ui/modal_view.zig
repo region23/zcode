@@ -12,7 +12,7 @@ pub const ModalItem = struct {
 
 /// Build the flattened list of modal items
 pub fn buildModalItems(state: *const App.AppState, allocator: std.mem.Allocator) ![]ModalItem {
-    var items = std.ArrayList(ModalItem).init(allocator);
+    var items = std.array_list.AlignedManaged(ModalItem, null).init(allocator);
     errdefer items.deinit();
 
     // Iterate through all providers
@@ -69,8 +69,8 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
     const modal_win = win.child(.{
         .x_off = modal_x,
         .y_off = modal_y,
-        .width = .{ .limit = modal_width },
-        .height = .{ .limit = modal_height },
+        .width = modal_width,
+        .height = modal_height,
     });
 
     // Clear and draw border
@@ -88,8 +88,8 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
     const title_win = modal_win.child(.{
         .x_off = 2,
         .y_off = 1,
-        .width = .{ .limit = modal_width - 4 },
-        .height = .{ .limit = 1 },
+        .width = modal_width - 4,
+        .height = 1,
     });
 
     const title_style = vaxis.Style{
@@ -102,14 +102,14 @@ const title_segment = vaxis.Segment{
         .text = "Select Provider & Model",
         .style = title_style,
     };
-    _ = try title_win.printSegment(title_segment, .{});
+    _ = title_win.printSegment(title_segment, .{});
 
     // Separator
     const sep_win = modal_win.child(.{
         .x_off = 1,
         .y_off = 2,
-        .width = .{ .limit = modal_width - 2 },
-        .height = .{ .limit = 1 },
+        .width = modal_width - 2,
+        .height = 1,
     });
 
 const sep_segment = vaxis.Segment{
@@ -119,7 +119,7 @@ const sep_segment = vaxis.Segment{
 
     var i: usize = 0;
     while (i < modal_width - 2) : (i += 1) {
-        _ = try sep_win.printSegment(sep_segment, .{});
+        _ = sep_win.printSegment(sep_segment, .{});
     }
 
     // Build modal items
@@ -136,8 +136,8 @@ const sep_segment = vaxis.Segment{
     const content_win = modal_win.child(.{
         .x_off = 2,
         .y_off = 3,
-        .width = .{ .limit = modal_width - 4 },
-        .height = .{ .limit = content_height },
+        .width = modal_width - 4,
+        .height = content_height,
     });
 
     // Calculate scroll offset to keep cursor visible
@@ -155,9 +155,9 @@ const sep_segment = vaxis.Segment{
 
         const item_win = content_win.child(.{
             .x_off = 0,
-            .y_off = row,
-            .width = .{ .limit = modal_width - 4 },
-            .height = .{ .limit = 1 },
+            .y_off = @intCast(row),
+            .width = modal_width - 4,
+            .height = 1,
         });
 
         if (item.model) |model| {
@@ -181,7 +181,7 @@ const segment = vaxis.Segment{
                 .text = text,
                 .style = style,
             };
-            _ = try item_win.printSegment(segment, .{});
+            _ = item_win.printSegment(segment, .{});
         } else {
             // Provider header
             const style = vaxis.Style{
@@ -204,7 +204,7 @@ const segment = vaxis.Segment{
                 .text = text,
                 .style = style,
             };
-            _ = try item_win.printSegment(segment, .{});
+            _ = item_win.printSegment(segment, .{});
         }
 
         row += 1;
@@ -214,21 +214,21 @@ const segment = vaxis.Segment{
     const bottom_sep_win = modal_win.child(.{
         .x_off = 1,
         .y_off = modal_height - 3,
-        .width = .{ .limit = modal_width - 2 },
-        .height = .{ .limit = 1 },
+        .width = modal_width - 2,
+        .height = 1,
     });
 
     i = 0;
     while (i < modal_width - 2) : (i += 1) {
-        _ = try bottom_sep_win.printSegment(sep_segment, .{});
+        _ = bottom_sep_win.printSegment(sep_segment, .{});
     }
 
     // Key hints
     const hints_win = modal_win.child(.{
         .x_off = 2,
         .y_off = modal_height - 2,
-        .width = .{ .limit = modal_width - 4 },
-        .height = .{ .limit = 1 },
+        .width = modal_width - 4,
+        .height = 1,
     });
 
     const hints_style = vaxis.Style{
@@ -240,7 +240,7 @@ const hints_segment = vaxis.Segment{
         .text = "↑↓: Navigate | Enter: Select | Esc: Cancel",
         .style = hints_style,
     };
-    _ = try hints_win.printSegment(hints_segment, .{});
+    _ = hints_win.printSegment(hints_segment, .{});
 }
 
 fn drawBorder(win: vaxis.Window, style: vaxis.Style) !void {
@@ -248,61 +248,61 @@ fn drawBorder(win: vaxis.Window, style: vaxis.Style) !void {
     var top_win = win.child(.{
         .x_off = 0,
         .y_off = 0,
-        .width = .{ .limit = win.width },
-        .height = .{ .limit = 1 },
+        .width = win.width,
+        .height = 1,
     });
 
-const corner_segment = vaxis.Segment{ .text = "┌", .style = style };
-    _ = try top_win.printSegment(corner_segment, .{});
+var corner_segment = vaxis.Segment{ .text = "┌", .style = style };
+    _ = top_win.printSegment(corner_segment, .{});
 
 const horizontal_segment = vaxis.Segment{ .text = "─", .style = style };
     var i: usize = 1;
     while (i < win.width - 1) : (i += 1) {
-        _ = try top_win.printSegment(horizontal_segment, .{});
+        _ = top_win.printSegment(horizontal_segment, .{});
     }
 
     corner_segment.text = "┐";
-    _ = try top_win.printSegment(corner_segment, .{});
+    _ = top_win.printSegment(corner_segment, .{});
 
     // Sides
     var row: usize = 1;
     while (row < win.height - 1) : (row += 1) {
         const left_win = win.child(.{
             .x_off = 0,
-            .y_off = row,
-            .width = .{ .limit = 1 },
-            .height = .{ .limit = 1 },
+            .y_off = @intCast(row),
+            .width = 1,
+            .height = 1,
         });
 
 const vertical_segment = vaxis.Segment{ .text = "│", .style = style };
-        _ = try left_win.printSegment(vertical_segment, .{});
+        _ = left_win.printSegment(vertical_segment, .{});
 
         const right_win = win.child(.{
             .x_off = win.width - 1,
-            .y_off = row,
-            .width = .{ .limit = 1 },
-            .height = .{ .limit = 1 },
+            .y_off = @intCast(row),
+            .width = 1,
+            .height = 1,
         });
 
-        _ = try right_win.printSegment(vertical_segment, .{});
+        _ = right_win.printSegment(vertical_segment, .{});
     }
 
     // Bottom border
     var bottom_win = win.child(.{
         .x_off = 0,
         .y_off = win.height - 1,
-        .width = .{ .limit = win.width },
-        .height = .{ .limit = 1 },
+        .width = win.width,
+        .height = 1,
     });
 
     corner_segment.text = "└";
-    _ = try bottom_win.printSegment(corner_segment, .{});
+    _ = bottom_win.printSegment(corner_segment, .{});
 
     i = 1;
     while (i < win.width - 1) : (i += 1) {
-        _ = try bottom_win.printSegment(horizontal_segment, .{});
+        _ = bottom_win.printSegment(horizontal_segment, .{});
     }
 
     corner_segment.text = "┘";
-    _ = try bottom_win.printSegment(corner_segment, .{});
+    _ = bottom_win.printSegment(corner_segment, .{});
 }

@@ -73,24 +73,36 @@ pub const OpenAIClient = struct {
             .{ .name = "Content-Type", .value = "application/json" },
         };
 
-        // Prepare response buffer
-        var response_body = std.array_list.AlignedManaged(u8, null).init(allocator);
-        defer response_body.deinit();
-
-        // Send request
-        _ = try http_client.fetch(.{
-            .location = .{ .url = "https://api.openai.com/v1/chat/completions" },
-            .method = .POST,
-            .payload = request_json,
+        // Create request
+        const uri = try std.Uri.parse("https://api.openai.com/v1/chat/completions");
+        var req = try http_client.request(.POST, uri, .{
             .extra_headers = &headers,
-            .response_writer = response_body.writer(),
         });
+        defer req.deinit();
+
+        // Send request body
+        req.transfer_encoding = .{ .content_length = request_json.len };
+        var buffer: [4096]u8 = undefined;
+        var body_writer = try req.sendBodyUnflushed(&buffer);
+        try body_writer.writer.writeAll(request_json);
+        try body_writer.end();
+        try req.connection.?.flush();
+
+        // Receive response
+        var redirect_buffer: [1024]u8 = undefined;
+        var response = try req.receiveHead(&redirect_buffer);
+
+        var transfer_buffer: [4096]u8 = undefined;
+        const io_reader = response.reader(&transfer_buffer);
+
+        const response_body = try io_reader.allocRemaining(allocator, std.Io.Limit.limited(10 * 1024 * 1024));
+        defer allocator.free(response_body);
 
         // Parse response JSON
         const parsed = try std.json.parseFromSlice(
             std.json.Value,
             allocator,
-            response_body.items,
+            response_body,
             .{},
         );
         defer parsed.deinit();
@@ -183,49 +195,38 @@ pub const OpenAIClient = struct {
 
         // Send request body
         req.transfer_encoding = .{ .content_length = request_json.len };
-        try req.send();
-        try req.writeAll(request_json);
-        try req.finish();
+        var buffer: [4096]u8 = undefined;
+        var body_writer = try req.sendBodyUnflushed(&buffer);
+        try body_writer.writer.writeAll(request_json);
+        try body_writer.end();
+        try req.connection.?.flush();
 
-        // Wait for response headers
-        try req.wait();
+        // Receive response
+        var redirect_buffer: [1024]u8 = undefined;
+        var response = try req.receiveHead(&redirect_buffer);
 
-        // Stream response
+        var transfer_buffer: [4096]u8 = undefined;
+        const io_reader = response.reader(&transfer_buffer);
+
+        // Read entire response (TODO: implement true SSE streaming)
+        const response_body = try io_reader.allocRemaining(allocator, std.Io.Limit.limited(10 * 1024 * 1024));
+        defer allocator.free(response_body);
+
+        // Parse SSE chunks from buffered response
         var parser = streaming.SSEParser.init(allocator);
         defer parser.deinit();
 
-        var transfer_buffer: [4096]u8 = undefined;
-        var response = try req.response(.{});
-        const http_reader = response.reader(&transfer_buffer);
+        // Process response to simulate streaming
+        if (try parser.parseChunk(response_body)) |event| {
+            defer event.deinit(allocator);
 
-        var read_buffer: [4096]u8 = undefined;
-
-        while (true) {
-            const bytes_read = http_reader.read(&read_buffer) catch |err| {
-                if (err == error.EndOfStream) break;
-                return err;
-            };
-
-            if (bytes_read == 0) break;
-
-            const chunk_data = read_buffer[0..bytes_read];
-
-            // Parse chunk
-            if (try parser.parseChunk(chunk_data)) |event| {
-                defer event.deinit(allocator);
-
-                if (event.is_done) {
-                    // Send final chunk to callback
-                    callback(.{ .content = "", .is_done = true }, user_data);
-                    break;
-                }
-
-                if (event.content) |content| {
-                    // Send content chunk to callback
-                    callback(.{ .content = content, .is_done = false }, user_data);
-                }
+            if (event.content) |content| {
+                callback(.{ .content = content, .is_done = false }, user_data);
             }
         }
+
+        // Final done callback
+        callback(.{ .content = "", .is_done = true }, user_data);
     }
 
     fn deinitImpl(ctx: *anyopaque) void {

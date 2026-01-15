@@ -83,24 +83,35 @@ pub const OpenRouterClient = struct {
             .{ .name = "X-Title", .value = "zcode" },
         };
 
-        // Prepare response buffer
-        var response_body = std.array_list.AlignedManaged(u8, null).init(allocator);
-        defer response_body.deinit();
-
-        // Send request
-        _ = try http_client.fetch(.{
-            .location = .{ .uri = uri },
-            .method = .POST,
-            .payload = request_json,
+        // Create request
+        var req = try http_client.request(.POST, uri, .{
             .extra_headers = &headers,
-            .response_writer = response_body.writer(),
         });
+        defer req.deinit();
+
+        // Send request body
+        req.transfer_encoding = .{ .content_length = request_json.len };
+        var buffer: [4096]u8 = undefined;
+        var body_writer = try req.sendBodyUnflushed(&buffer);
+        try body_writer.writer.writeAll(request_json);
+        try body_writer.end();
+        try req.connection.?.flush();
+
+        // Receive response
+        var redirect_buffer: [1024]u8 = undefined;
+        var response = try req.receiveHead(&redirect_buffer);
+
+        var transfer_buffer: [4096]u8 = undefined;
+        const io_reader = response.reader(&transfer_buffer);
+
+        const response_body = try io_reader.allocRemaining(allocator, std.Io.Limit.limited(10 * 1024 * 1024));
+        defer allocator.free(response_body);
 
         // Parse response (OpenAI-compatible format)
         const parsed = try std.json.parseFromSlice(
             std.json.Value,
             allocator,
-            response_body.items,
+            response_body,
             .{},
         );
         defer parsed.deinit();
@@ -155,61 +166,49 @@ pub const OpenRouterClient = struct {
 
         const uri = try std.Uri.parse("https://openrouter.ai/api/v1/chat/completions");
 
-        var headers = std.http.Headers.init(allocator);
-        defer headers.deinit();
-
         const auth_header = try std.fmt.allocPrint(allocator, "Bearer {s}", .{self.api_key});
         defer allocator.free(auth_header);
 
-        try headers.append("Authorization", auth_header);
-        try headers.append("Content-Type", "application/json");
-        try headers.append("HTTP-Referer", "https://github.com/yourusername/zcode");
-        try headers.append("X-Title", "zcode");
+        const headers = [_]std.http.Header{
+            .{ .name = "Authorization", .value = auth_header },
+            .{ .name = "Content-Type", .value = "application/json" },
+            .{ .name = "HTTP-Referer", .value = "https://github.com/yourusername/zcode" },
+            .{ .name = "X-Title", .value = "zcode" },
+        };
 
-        var request = try http_client.open(.POST, uri, .{
-            .server_header_buffer = try allocator.alloc(u8, 8192),
-            .headers = headers,
+        var req = try http_client.request(.POST, uri, .{
+            .extra_headers = &headers,
         });
-        defer request.deinit();
+        defer req.deinit();
 
-        request.transfer_encoding = .{ .content_length = request_json.len };
+        req.transfer_encoding = .{ .content_length = request_json.len };
+        var buffer: [4096]u8 = undefined;
+        var body_writer = try req.sendBodyUnflushed(&buffer);
+        try body_writer.writer.writeAll(request_json);
+        try body_writer.end();
+        try req.connection.?.flush();
 
-        try request.send();
-        try request.writeAll(request_json);
-        try request.finish();
+        var redirect_buffer: [1024]u8 = undefined;
+        var response = try req.receiveHead(&redirect_buffer);
 
-        try request.wait();
+        var transfer_buffer: [4096]u8 = undefined;
+        const io_reader = response.reader(&transfer_buffer);
 
-        // Stream response
+        const response_body = try io_reader.allocRemaining(allocator, std.Io.Limit.limited(10 * 1024 * 1024));
+        defer allocator.free(response_body);
+
         var parser = streaming.SSEParser.init(allocator);
         defer parser.deinit();
 
-        var read_buffer: [4096]u8 = undefined;
-        const reader = request.reader();
+        if (try parser.parseChunk(response_body)) |event| {
+            defer event.deinit(allocator);
 
-        while (true) {
-            const bytes_read = reader.read(&read_buffer) catch |err| {
-                if (err == error.EndOfStream) break;
-                return err;
-            };
-
-            if (bytes_read == 0) break;
-
-            const chunk_data = read_buffer[0..bytes_read];
-
-            if (try parser.parseChunk(chunk_data)) |event| {
-                defer event.deinit(allocator);
-
-                if (event.is_done) {
-                    callback(.{ .content = "", .is_done = true }, user_data);
-                    break;
-                }
-
-                if (event.content) |content| {
-                    callback(.{ .content = content, .is_done = false }, user_data);
-                }
+            if (event.content) |content| {
+                callback(.{ .content = content, .is_done = false }, user_data);
             }
         }
+
+        callback(.{ .content = "", .is_done = true }, user_data);
     }
 
     fn deinitImpl(ctx: *anyopaque) void {

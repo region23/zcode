@@ -14,7 +14,7 @@ pub const ToolInvocation = struct {
 /// Extract tool invocations from LLM response text
 /// Format: "tool: TOOL_NAME({JSON_ARGS})"
 pub fn extractToolInvocations(text: []const u8, allocator: std.mem.Allocator) ![]ToolInvocation {
-    var invocations = std.ArrayList(ToolInvocation).init(allocator);
+    var invocations = std.array_list.AlignedManaged(ToolInvocation, null).init(allocator);
     errdefer {
         for (invocations.items) |*inv| {
             inv.deinit();

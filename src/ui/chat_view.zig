@@ -44,16 +44,16 @@ pub fn draw(win: vaxis.Window, state: *const App.AppState) !void {
         if (y < win.height) {
             var prefix_win = win.child(.{
                 .x_off = 0,
-                .y_off = y,
-                .width = .{ .limit = win.width },
-                .height = .{ .limit = 1 },
+                .y_off = @intCast(y),
+                .width = win.width,
+                .height = 1,
             });
 
 const prefix_segment = vaxis.Segment{
                 .text = role_prefix,
                 .style = role_style,
             };
-            _ = try prefix_win.printSegment(prefix_segment, .{});
+            _ = prefix_win.printSegment(prefix_segment, .{});
             y += 1;
         }
 
@@ -122,9 +122,9 @@ fn renderContent(
 
                     var line_win = win.child(.{
                         .x_off = 2,
-                        .y_off = y,
-                        .width = .{ .limit = win.width - 2 },
-                        .height = .{ .limit = 1 },
+                        .y_off = @intCast(y),
+                        .width = if (win.width > 2) win.width - 2 else 1,
+                        .height = 1,
                     });
 
                     for (tokens) |token| {
@@ -133,23 +133,23 @@ const segment = vaxis.Segment{
                             .text = token.text,
                             .style = token_style,
                         };
-                        _ = try line_win.printSegment(segment, .{});
+                        _ = line_win.printSegment(segment, .{});
                     }
                     y += 1;
                 } else if (std.mem.startsWith(u8, std.mem.trimLeft(u8, line, " \t"), "```")) {
                     // Render fence line in gray
                     var line_win = win.child(.{
                         .x_off = 0,
-                        .y_off = y,
-                        .width = .{ .limit = win.width },
-                        .height = .{ .limit = 1 },
+                        .y_off = @intCast(y),
+                        .width = win.width,
+                        .height = 1,
                     });
 
 const segment = vaxis.Segment{
                         .text = line,
                         .style = .{ .fg = .{ .index = 8 } }, // Gray
                     };
-                    _ = try line_win.printSegment(segment, .{});
+                    _ = line_win.printSegment(segment, .{});
                     y += 1;
                 } else {
                     // Regular text line
@@ -180,16 +180,16 @@ fn renderPlainLine(win: vaxis.Window, line: []const u8, y: usize, style: vaxis.S
 
     var line_win = win.child(.{
         .x_off = 2,
-        .y_off = y,
-        .width = .{ .limit = win.width - 2 },
-        .height = .{ .limit = 1 },
+        .y_off = @intCast(y),
+        .width = if (win.width > 2) win.width - 2 else 1,
+        .height = 1,
     });
 
 const segment = vaxis.Segment{
         .text = line,
         .style = style,
     };
-    _ = try line_win.printSegment(segment, .{});
+    _ = line_win.printSegment(segment, .{});
 
     return y + 1;
 }

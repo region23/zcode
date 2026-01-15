@@ -14,8 +14,8 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
     const status_win = win.child(.{
         .x_off = 0,
         .y_off = 0,
-        .width = .{ .limit = width },
-        .height = .{ .limit = 1 },
+        .width = width,
+        .height = 1,
     });
     try status_bar.draw(status_win, state);
 
@@ -23,8 +23,8 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
     const separator_win = win.child(.{
         .x_off = 0,
         .y_off = 1,
-        .width = .{ .limit = width },
-        .height = .{ .limit = 1 },
+        .width = width,
+        .height = 1,
     });
     separator_win.clear();
     var i: usize = 0;
@@ -33,7 +33,7 @@ const segment = vaxis.Segment{
             .text = "─",
             .style = .{ .fg = .{ .index = 8 } }, // Gray
         };
-        _ = try separator_win.printSegment(segment, .{});
+        _ = separator_win.printSegment(segment, .{});
     }
 
     // Chat view (middle, scrollable)
@@ -41,8 +41,8 @@ const segment = vaxis.Segment{
     const chat_win = win.child(.{
         .x_off = 0,
         .y_off = 2,
-        .width = .{ .limit = width },
-        .height = .{ .limit = chat_height },
+        .width = width,
+        .height = chat_height,
     });
     try chat_view.draw(chat_win, state);
 
@@ -52,8 +52,8 @@ const segment = vaxis.Segment{
         const input_sep_win = win.child(.{
             .x_off = 0,
             .y_off = input_sep_y,
-            .width = .{ .limit = width },
-            .height = .{ .limit = 1 },
+            .width = width,
+            .height = 1,
         });
         input_sep_win.clear();
         i = 0;
@@ -62,7 +62,7 @@ const segment = vaxis.Segment{
                 .text = "─",
                 .style = .{ .fg = .{ .index = 8 } },
             };
-            _ = try input_sep_win.printSegment(segment, .{});
+            _ = input_sep_win.printSegment(segment, .{});
         }
     }
 
@@ -72,8 +72,8 @@ const segment = vaxis.Segment{
         const input_win = win.child(.{
             .x_off = 0,
             .y_off = input_y,
-            .width = .{ .limit = width },
-            .height = .{ .limit = 1 },
+            .width = width,
+            .height = 1,
         });
         try input_view.draw(input_win, state);
     }
@@ -84,8 +84,8 @@ const segment = vaxis.Segment{
         const hints_win = win.child(.{
             .x_off = 0,
             .y_off = hints_y,
-            .width = .{ .limit = width },
-            .height = .{ .limit = 1 },
+            .width = width,
+            .height = 1,
         });
         hints_win.clear();
 
@@ -97,7 +97,7 @@ const hints_segment = vaxis.Segment{
             .text = " Tab: Mode | Ctrl+P: Model | Ctrl+L: Clear | PgUp/PgDn: Scroll | Ctrl+Q: Quit",
             .style = hints_style,
         };
-        _ = try hints_win.printSegment(hints_segment, .{});
+        _ = hints_win.printSegment(hints_segment, .{});
     }
 
     // Modal overlay (if shown)

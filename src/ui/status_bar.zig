@@ -24,7 +24,7 @@ const left_segment = vaxis.Segment{
         .text = left_text,
         .style = bg_style,
     };
-    _ = try win.printSegment(left_segment, .{});
+    _ = win.printSegment(left_segment, .{});
 
     // Right section: Provider | Model [Streaming]
     const provider_name = @tagName(state.current_provider);
@@ -50,7 +50,7 @@ const space_segment = vaxis.Segment{
             .text = " ",
             .style = bg_style,
         };
-        _ = try win.printSegment(space_segment, .{});
+        _ = win.printSegment(space_segment, .{});
     }
 
     // Draw right text
@@ -58,5 +58,5 @@ const right_segment = vaxis.Segment{
         .text = right_text,
         .style = bg_style,
     };
-    _ = try win.printSegment(right_segment, .{});
+    _ = win.printSegment(right_segment, .{});
 }

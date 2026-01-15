@@ -14,14 +14,14 @@ const prompt_segment = vaxis.Segment{
         .text = "> ",
         .style = prompt_style,
     };
-    _ = try win.printSegment(prompt_segment, .{});
+    _ = win.printSegment(prompt_segment, .{});
 
     // Draw input buffer
 const input_segment = vaxis.Segment{
         .text = state.input_buffer.items,
         .style = .{},
     };
-    _ = try win.printSegment(input_segment, .{});
+    _ = win.printSegment(input_segment, .{});
 
     // Show cursor at the end of input
     // Note: Cursor positioning would be handled by vaxis

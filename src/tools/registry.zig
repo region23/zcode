@@ -63,7 +63,7 @@ pub const ToolRegistry = struct {
 
     /// Generate system prompt with available tools based on mode
     pub fn generateSystemPrompt(self: *ToolRegistry, mode: config.Mode, allocator: std.mem.Allocator) ![]const u8 {
-        var list = std.ArrayList(u8).init(allocator);
+        var list = std.array_list.AlignedManaged(u8, null).init(allocator);
         const writer = list.writer();
 
         try writer.writeAll(

@@ -32,18 +32,19 @@ pub fn main() !void {
     defer app_state.deinit();
 
     // Initialize vaxis
-    var tty = try vaxis.Tty.init();
+    var tty_buffer: [4096]u8 = undefined;
+    var tty = try vaxis.Tty.init(&tty_buffer);
     defer tty.deinit();
 
     var vx = try vaxis.init(allocator, .{});
-    defer vx.deinit(allocator, tty.anyWriter());
+    defer vx.deinit(allocator, tty.writer());
 
     var loop: vaxis.Loop(Event) = .{ .tty = &tty, .vaxis = &vx };
     try loop.start();
     defer loop.stop();
 
-    try vx.enterAltScreen(tty.anyWriter());
-    try vx.queryTerminal(tty.anyWriter(), 1 * std.time.ns_per_s);
+    try vx.enterAltScreen(tty.writer());
+    try vx.queryTerminal(tty.writer(), 1 * std.time.ns_per_s);
 
     // Main event loop
     var running = true;
@@ -125,7 +126,7 @@ pub fn main() !void {
                     }
                 },
                 .winsize => |ws| {
-                    try vx.resize(allocator, tty.anyWriter(), ws);
+                    try vx.resize(allocator, tty.writer(), ws);
                 },
                 else => {},
             }
@@ -135,7 +136,7 @@ pub fn main() !void {
         const win = vx.window();
         win.clear();
         try layout.draw(win, &app_state);
-        try vx.render(tty.anyWriter());
+        try vx.render(tty.writer());
     }
 }
 
@@ -163,7 +164,7 @@ fn agentLoop(state: *App.AppState, allocator: std.mem.Allocator) !void {
         const messages = state.conversation.getMessages();
 
         // Buffer for collecting streamed response
-        var response_buffer = std.ArrayList(u8).init(allocator);
+        var response_buffer = std.array_list.AlignedManaged(u8, null).init(allocator);
         defer response_buffer.deinit();
 
         // Set streaming flag
@@ -171,7 +172,7 @@ fn agentLoop(state: *App.AppState, allocator: std.mem.Allocator) !void {
 
         // Stream callback context
         const StreamContext = struct {
-            buffer: *std.ArrayList(u8),
+            buffer: *std.array_list.AlignedManaged(u8, null),
         };
 
         var stream_ctx = StreamContext{
@@ -264,7 +265,7 @@ fn agentLoop(state: *App.AppState, allocator: std.mem.Allocator) !void {
             };
 
             // Serialize result to JSON
-            const result_json = try std.json.stringifyAlloc(allocator, result.data, .{});
+            const result_json = try std.fmt.allocPrint(allocator, "{f}", .{std.json.fmt(result.data, .{})});
             defer allocator.free(result_json);
 
             // Add tool result to conversation

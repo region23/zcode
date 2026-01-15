@@ -30,7 +30,7 @@ fn executeListFiles(args: std.json.Value, allocator: std.mem.Allocator) !registr
     defer allocator.free(abs_path);
 
     // Open directory
-    const dir = std.fs.openDirAbsolute(abs_path, .{ .iterate = true }) catch |err| {
+    var dir = std.fs.openDirAbsolute(abs_path, .{ .iterate = true }) catch |err| {
         // Return error as tool result
         var result_obj = std.json.ObjectMap.init(allocator);
         const error_msg = try std.fmt.allocPrint(allocator, "Failed to open directory: {s}", .{@errorName(err)});
