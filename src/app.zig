@@ -3,6 +3,9 @@ const config = @import("config.zig");
 const api_common = @import("api/common.zig");
 const api_client = @import("api/client.zig");
 const api_openai = @import("api/openai.zig");
+const api_anthropic = @import("api/anthropic.zig");
+const api_zai = @import("api/zai.zig");
+const api_openrouter = @import("api/openrouter.zig");
 const tools = @import("tools/registry.zig");
 const read_file = @import("tools/read_file.zig");
 const list_files = @import("tools/list_files.zig");
@@ -19,6 +22,8 @@ pub const AppState = struct {
     scroll_offset: usize,
     is_streaming: bool,
     show_modal: bool,
+    modal_cursor: usize,
+    modal_expanded_provider: ?config.ApiProvider,
     allocator: std.mem.Allocator,
     config: config.Config,
 
@@ -39,22 +44,8 @@ pub const AppState = struct {
             return error.NoApiKey;
         };
 
-        // Create API client (only OpenAI for Phase 1)
-        const client = switch (provider) {
-            .openai => blk: {
-                const openai_client = try api_openai.OpenAIClient.init(
-                    allocator,
-                    api_key,
-                    model,
-                    cfg.max_tokens,
-                );
-                break :blk openai_client.asApiClient();
-            },
-            else => {
-                std.debug.print("Provider {s} not yet implemented (Phase 2)\n", .{@tagName(provider)});
-                return error.ProviderNotImplemented;
-            },
-        };
+        // Create API client for all providers
+        const client = try createApiClient(provider, api_key, model, cfg.max_tokens, allocator);
 
         var state = AppState{
             .conversation = api_common.Conversation.init(allocator),
@@ -67,6 +58,8 @@ pub const AppState = struct {
             .scroll_offset = 0,
             .is_streaming = false,
             .show_modal = false,
+            .modal_cursor = 0,
+            .modal_expanded_provider = null,
             .allocator = allocator,
             .config = cfg,
         };
@@ -146,4 +139,109 @@ pub const AppState = struct {
             .build => "[BUILD]",
         };
     }
+
+    /// Open the provider/model selection modal
+    pub fn openModal(self: *AppState) void {
+        self.show_modal = true;
+        self.modal_cursor = 0;
+        self.modal_expanded_provider = self.current_provider;
+    }
+
+    /// Close the modal without changes
+    pub fn closeModal(self: *AppState) void {
+        self.show_modal = false;
+        self.modal_cursor = 0;
+        self.modal_expanded_provider = null;
+    }
+
+    /// Switch to a new provider and model
+    pub fn switchProviderAndModel(self: *AppState, provider: config.ApiProvider, model: []const u8) !void {
+        // Get API key for new provider
+        const api_key = self.config.getApiKey(provider) orelse {
+            return error.NoApiKey;
+        };
+
+        // Clean up old API client and model string
+        self.api_client.deinit();
+        self.allocator.free(self.current_model);
+
+        // Create new API client
+        const new_client = try createApiClient(provider, api_key, model, self.config.max_tokens, self.allocator);
+
+        // Update state
+        self.api_client = new_client;
+        self.current_provider = provider;
+        self.current_model = try self.allocator.dupe(u8, model);
+
+        // Close modal
+        self.closeModal();
+    }
 };
+
+/// Create an API client for the given provider
+fn createApiClient(
+    provider: config.ApiProvider,
+    api_key: []const u8,
+    model: []const u8,
+    max_tokens: usize,
+    allocator: std.mem.Allocator,
+) !api_client.ApiClient {
+    return switch (provider) {
+        .openai => blk: {
+            const openai_client = try api_openai.OpenAIClient.init(
+                allocator,
+                api_key,
+                model,
+                max_tokens,
+            );
+            break :blk openai_client.asApiClient();
+        },
+        .anthropic => blk: {
+            const anthropic_client = try api_anthropic.AnthropicClient.init(
+                allocator,
+                api_key,
+                model,
+                max_tokens,
+            );
+            break :blk anthropic_client.asApiClient();
+        },
+        .zai => blk: {
+            const zai_client = try api_zai.ZAIClient.init(
+                allocator,
+                api_key,
+                model,
+                max_tokens,
+            );
+            break :blk zai_client.asApiClient();
+        },
+        .deepseek => blk: {
+            // DeepSeek via OpenRouter
+            const or_client = try api_openrouter.OpenRouterClient.init(
+                allocator,
+                api_key,
+                model,
+                max_tokens,
+            );
+            break :blk or_client.asApiClient();
+        },
+        .qwen => blk: {
+            // Qwen via OpenRouter
+            const or_client = try api_openrouter.OpenRouterClient.init(
+                allocator,
+                api_key,
+                model,
+                max_tokens,
+            );
+            break :blk or_client.asApiClient();
+        },
+        .openrouter => blk: {
+            const or_client = try api_openrouter.OpenRouterClient.init(
+                allocator,
+                api_key,
+                model,
+                max_tokens,
+            );
+            break :blk or_client.asApiClient();
+        },
+    };
+}

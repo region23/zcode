@@ -3,7 +3,9 @@ const client = @import("client.zig");
 const common = @import("common.zig");
 const streaming = @import("streaming.zig");
 
-pub const OpenAIClient = struct {
+/// OpenRouter client - Generic OpenAI-compatible API for multiple models
+/// Supports DeepSeek, Qwen, and many other models
+pub const OpenRouterClient = struct {
     api_key: []const u8,
     model: []const u8,
     allocator: std.mem.Allocator,
@@ -15,8 +17,8 @@ pub const OpenAIClient = struct {
         .deinit = deinitImpl,
     };
 
-    pub fn init(allocator: std.mem.Allocator, api_key: []const u8, model: []const u8, max_tokens: usize) !*OpenAIClient {
-        const self = try allocator.create(OpenAIClient);
+    pub fn init(allocator: std.mem.Allocator, api_key: []const u8, model: []const u8, max_tokens: usize) !*OpenRouterClient {
+        const self = try allocator.create(OpenRouterClient);
         self.* = .{
             .api_key = try allocator.dupe(u8, api_key),
             .model = try allocator.dupe(u8, model),
@@ -26,24 +28,23 @@ pub const OpenAIClient = struct {
         return self;
     }
 
-    pub fn asApiClient(self: *OpenAIClient) client.ApiClient {
+    pub fn asApiClient(self: *OpenRouterClient) client.ApiClient {
         return .{
             .ptr = self,
             .vtable = &vtable,
         };
     }
 
-    fn sendMessageImpl(ctx: *anyopaque, messages: []const common.Message, allocator: std.mem.Allocator) ![]u8 {
-        const self: *OpenAIClient = @ptrCast(@alignCast(ctx));
-
-        // Build request body
+    fn buildRequestBody(self: *OpenRouterClient, messages: []const common.Message, stream: bool, allocator: std.mem.Allocator) ![]u8 {
         var request_obj = std.json.ObjectMap.init(allocator);
         defer request_obj.deinit();
 
         try request_obj.put("model", .{ .string = self.model });
         try request_obj.put("max_tokens", .{ .integer = @intCast(self.max_tokens) });
+        if (stream) {
+            try request_obj.put("stream", .{ .bool = true });
+        }
 
-        // Convert messages to JSON array
         var messages_array = std.json.Array.init(allocator);
         defer messages_array.deinit();
 
@@ -56,16 +57,21 @@ pub const OpenAIClient = struct {
 
         try request_obj.put("messages", .{ .array = messages_array });
 
-        // Serialize to JSON
-        const request_json = try std.json.stringifyAlloc(allocator, std.json.Value{ .object = request_obj }, .{});
+        return try std.json.stringifyAlloc(allocator, std.json.Value{ .object = request_obj }, .{});
+    }
+
+    fn sendMessageImpl(ctx: *anyopaque, messages: []const common.Message, allocator: std.mem.Allocator) ![]u8 {
+        const self: *OpenRouterClient = @ptrCast(@alignCast(ctx));
+
+        const request_json = try self.buildRequestBody(messages, false, allocator);
         defer allocator.free(request_json);
 
         // Create HTTP client
         var http_client = std.http.Client{ .allocator = allocator };
         defer http_client.deinit();
 
-        // Prepare request
-        const uri = try std.Uri.parse("https://api.openai.com/v1/chat/completions");
+        // OpenRouter endpoint
+        const uri = try std.Uri.parse("https://openrouter.ai/api/v1/chat/completions");
 
         var headers = std.http.Headers.init(allocator);
         defer headers.deinit();
@@ -75,6 +81,8 @@ pub const OpenAIClient = struct {
 
         try headers.append("Authorization", auth_header);
         try headers.append("Content-Type", "application/json");
+        try headers.append("HTTP-Referer", "https://github.com/yourusername/zcode"); // Required by OpenRouter
+        try headers.append("X-Title", "zcode"); // Optional but recommended
 
         var request = try http_client.open(.POST, uri, .{
             .server_header_buffer = try allocator.alloc(u8, 8192),
@@ -94,10 +102,10 @@ pub const OpenAIClient = struct {
         var response_body = std.ArrayList(u8).init(allocator);
         defer response_body.deinit();
 
-        const max_response_size = 10 * 1024 * 1024; // 10MB
+        const max_response_size = 10 * 1024 * 1024;
         try request.reader().readAllArrayList(&response_body, max_response_size);
 
-        // Parse response JSON
+        // Parse response (OpenAI-compatible format)
         const parsed = try std.json.parseFromSlice(
             std.json.Value,
             allocator,
@@ -114,7 +122,7 @@ pub const OpenAIClient = struct {
             if (error_val == .object) {
                 if (error_val.object.get("message")) |msg_val| {
                     if (msg_val == .string) {
-                        std.debug.print("OpenAI API Error: {s}\n", .{msg_val.string});
+                        std.debug.print("OpenRouter API Error: {s}\n", .{msg_val.string});
                         return error.ApiError;
                     }
                 }
@@ -122,7 +130,7 @@ pub const OpenAIClient = struct {
             return error.ApiError;
         }
 
-        // Extract content from response
+        // Extract content
         const choices = response_obj.get("choices") orelse return error.MissingChoices;
         if (choices != .array or choices.array.items.len == 0) return error.InvalidChoices;
 
@@ -144,40 +152,17 @@ pub const OpenAIClient = struct {
         callback: common.StreamCallback,
         user_data: ?*anyopaque,
     ) !void {
-        const self: *OpenAIClient = @ptrCast(@alignCast(ctx));
+        const self: *OpenRouterClient = @ptrCast(@alignCast(ctx));
         const allocator = self.allocator;
 
-        // Build request body with streaming enabled
-        var request_obj = std.json.ObjectMap.init(allocator);
-        defer request_obj.deinit();
-
-        try request_obj.put("model", .{ .string = self.model });
-        try request_obj.put("max_tokens", .{ .integer = @intCast(self.max_tokens) });
-        try request_obj.put("stream", .{ .bool = true });
-
-        // Convert messages to JSON array
-        var messages_array = std.json.Array.init(allocator);
-        defer messages_array.deinit();
-
-        for (messages) |msg| {
-            var msg_obj = std.json.ObjectMap.init(allocator);
-            try msg_obj.put("role", .{ .string = msg.role.toString() });
-            try msg_obj.put("content", .{ .string = msg.content });
-            try messages_array.append(.{ .object = msg_obj });
-        }
-
-        try request_obj.put("messages", .{ .array = messages_array });
-
-        // Serialize to JSON
-        const request_json = try std.json.stringifyAlloc(allocator, std.json.Value{ .object = request_obj }, .{});
+        const request_json = try self.buildRequestBody(messages, true, allocator);
         defer allocator.free(request_json);
 
         // Create HTTP client
         var http_client = std.http.Client{ .allocator = allocator };
         defer http_client.deinit();
 
-        // Prepare request
-        const uri = try std.Uri.parse("https://api.openai.com/v1/chat/completions");
+        const uri = try std.Uri.parse("https://openrouter.ai/api/v1/chat/completions");
 
         var headers = std.http.Headers.init(allocator);
         defer headers.deinit();
@@ -187,6 +172,8 @@ pub const OpenAIClient = struct {
 
         try headers.append("Authorization", auth_header);
         try headers.append("Content-Type", "application/json");
+        try headers.append("HTTP-Referer", "https://github.com/yourusername/zcode");
+        try headers.append("X-Title", "zcode");
 
         var request = try http_client.open(.POST, uri, .{
             .server_header_buffer = try allocator.alloc(u8, 8192),
@@ -219,18 +206,15 @@ pub const OpenAIClient = struct {
 
             const chunk_data = read_buffer[0..bytes_read];
 
-            // Parse chunk
             if (try parser.parseChunk(chunk_data)) |event| {
                 defer event.deinit(allocator);
 
                 if (event.is_done) {
-                    // Send final chunk to callback
                     callback(.{ .content = "", .is_done = true }, user_data);
                     break;
                 }
 
                 if (event.content) |content| {
-                    // Send content chunk to callback
                     callback(.{ .content = content, .is_done = false }, user_data);
                 }
             }
@@ -238,7 +222,7 @@ pub const OpenAIClient = struct {
     }
 
     fn deinitImpl(ctx: *anyopaque) void {
-        const self: *OpenAIClient = @ptrCast(@alignCast(ctx));
+        const self: *OpenRouterClient = @ptrCast(@alignCast(ctx));
         self.allocator.free(self.api_key);
         self.allocator.free(self.model);
         self.allocator.destroy(self);

@@ -1,18 +1,30 @@
-# Zig
+# Zig build artifacts
 zig-cache/
 zig-out/
 .zig-cache/
 
-# Environment
+# Build outputs
+*.o
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Environment variables (contains secrets)
 .env
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
+
+# Test artifacts
+test_*.txt
+test_*.md
+test_list_dir/

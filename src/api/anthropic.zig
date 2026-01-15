@@ -3,7 +3,7 @@ const client = @import("client.zig");
 const common = @import("common.zig");
 const streaming = @import("streaming.zig");
 
-pub const OpenAIClient = struct {
+pub const AnthropicClient = struct {
     api_key: []const u8,
     model: []const u8,
     allocator: std.mem.Allocator,
@@ -15,8 +15,8 @@ pub const OpenAIClient = struct {
         .deinit = deinitImpl,
     };
 
-    pub fn init(allocator: std.mem.Allocator, api_key: []const u8, model: []const u8, max_tokens: usize) !*OpenAIClient {
-        const self = try allocator.create(OpenAIClient);
+    pub fn init(allocator: std.mem.Allocator, api_key: []const u8, model: []const u8, max_tokens: usize) !*AnthropicClient {
+        const self = try allocator.create(AnthropicClient);
         self.* = .{
             .api_key = try allocator.dupe(u8, api_key),
             .model = try allocator.dupe(u8, model),
@@ -26,7 +26,7 @@ pub const OpenAIClient = struct {
         return self;
     }
 
-    pub fn asApiClient(self: *OpenAIClient) client.ApiClient {
+    pub fn asApiClient(self: *AnthropicClient) client.ApiClient {
         return .{
             .ptr = self,
             .vtable = &vtable,
@@ -34,7 +34,7 @@ pub const OpenAIClient = struct {
     }
 
     fn sendMessageImpl(ctx: *anyopaque, messages: []const common.Message, allocator: std.mem.Allocator) ![]u8 {
-        const self: *OpenAIClient = @ptrCast(@alignCast(ctx));
+        const self: *AnthropicClient = @ptrCast(@alignCast(ctx));
 
         // Build request body
         var request_obj = std.json.ObjectMap.init(allocator);
@@ -43,15 +43,31 @@ pub const OpenAIClient = struct {
         try request_obj.put("model", .{ .string = self.model });
         try request_obj.put("max_tokens", .{ .integer = @intCast(self.max_tokens) });
 
-        // Convert messages to JSON array
+        // Convert messages to Anthropic format
+        // Anthropic separates system messages from user/assistant messages
+        var system_content: ?[]const u8 = null;
         var messages_array = std.json.Array.init(allocator);
         defer messages_array.deinit();
 
         for (messages) |msg| {
-            var msg_obj = std.json.ObjectMap.init(allocator);
-            try msg_obj.put("role", .{ .string = msg.role.toString() });
-            try msg_obj.put("content", .{ .string = msg.content });
-            try messages_array.append(.{ .object = msg_obj });
+            if (msg.role == .system) {
+                system_content = msg.content;
+            } else {
+                var msg_obj = std.json.ObjectMap.init(allocator);
+                const role_str = switch (msg.role) {
+                    .user => "user",
+                    .assistant => "assistant",
+                    .tool_result => "user", // Tool results as user messages
+                    .system => "user", // Shouldn't happen due to check above
+                };
+                try msg_obj.put("role", .{ .string = role_str });
+                try msg_obj.put("content", .{ .string = msg.content });
+                try messages_array.append(.{ .object = msg_obj });
+            }
+        }
+
+        if (system_content) |sys| {
+            try request_obj.put("system", .{ .string = sys });
         }
 
         try request_obj.put("messages", .{ .array = messages_array });
@@ -65,15 +81,13 @@ pub const OpenAIClient = struct {
         defer http_client.deinit();
 
         // Prepare request
-        const uri = try std.Uri.parse("https://api.openai.com/v1/chat/completions");
+        const uri = try std.Uri.parse("https://api.anthropic.com/v1/messages");
 
         var headers = std.http.Headers.init(allocator);
         defer headers.deinit();
 
-        const auth_header = try std.fmt.allocPrint(allocator, "Bearer {s}", .{self.api_key});
-        defer allocator.free(auth_header);
-
-        try headers.append("Authorization", auth_header);
+        try headers.append("x-api-key", self.api_key);
+        try headers.append("anthropic-version", "2023-06-01");
         try headers.append("Content-Type", "application/json");
 
         var request = try http_client.open(.POST, uri, .{
@@ -114,7 +128,7 @@ pub const OpenAIClient = struct {
             if (error_val == .object) {
                 if (error_val.object.get("message")) |msg_val| {
                     if (msg_val == .string) {
-                        std.debug.print("OpenAI API Error: {s}\n", .{msg_val.string});
+                        std.debug.print("Anthropic API Error: {s}\n", .{msg_val.string});
                         return error.ApiError;
                     }
                 }
@@ -123,19 +137,16 @@ pub const OpenAIClient = struct {
         }
 
         // Extract content from response
-        const choices = response_obj.get("choices") orelse return error.MissingChoices;
-        if (choices != .array or choices.array.items.len == 0) return error.InvalidChoices;
+        const content_arr = response_obj.get("content") orelse return error.MissingContent;
+        if (content_arr != .array or content_arr.array.items.len == 0) return error.InvalidContent;
 
-        const first_choice = choices.array.items[0];
-        if (first_choice != .object) return error.InvalidChoice;
+        const first_content = content_arr.array.items[0];
+        if (first_content != .object) return error.InvalidContentBlock;
 
-        const message = first_choice.object.get("message") orelse return error.MissingMessage;
-        if (message != .object) return error.InvalidMessage;
+        const text = first_content.object.get("text") orelse return error.MissingText;
+        if (text != .string) return error.InvalidText;
 
-        const content = message.object.get("content") orelse return error.MissingContent;
-        if (content != .string) return error.InvalidContent;
-
-        return try allocator.dupe(u8, content.string);
+        return try allocator.dupe(u8, text.string);
     }
 
     fn streamMessageImpl(
@@ -144,7 +155,7 @@ pub const OpenAIClient = struct {
         callback: common.StreamCallback,
         user_data: ?*anyopaque,
     ) !void {
-        const self: *OpenAIClient = @ptrCast(@alignCast(ctx));
+        const self: *AnthropicClient = @ptrCast(@alignCast(ctx));
         const allocator = self.allocator;
 
         // Build request body with streaming enabled
@@ -155,15 +166,30 @@ pub const OpenAIClient = struct {
         try request_obj.put("max_tokens", .{ .integer = @intCast(self.max_tokens) });
         try request_obj.put("stream", .{ .bool = true });
 
-        // Convert messages to JSON array
+        // Convert messages to Anthropic format
+        var system_content: ?[]const u8 = null;
         var messages_array = std.json.Array.init(allocator);
         defer messages_array.deinit();
 
         for (messages) |msg| {
-            var msg_obj = std.json.ObjectMap.init(allocator);
-            try msg_obj.put("role", .{ .string = msg.role.toString() });
-            try msg_obj.put("content", .{ .string = msg.content });
-            try messages_array.append(.{ .object = msg_obj });
+            if (msg.role == .system) {
+                system_content = msg.content;
+            } else {
+                var msg_obj = std.json.ObjectMap.init(allocator);
+                const role_str = switch (msg.role) {
+                    .user => "user",
+                    .assistant => "assistant",
+                    .tool_result => "user",
+                    .system => "user",
+                };
+                try msg_obj.put("role", .{ .string = role_str });
+                try msg_obj.put("content", .{ .string = msg.content });
+                try messages_array.append(.{ .object = msg_obj });
+            }
+        }
+
+        if (system_content) |sys| {
+            try request_obj.put("system", .{ .string = sys });
         }
 
         try request_obj.put("messages", .{ .array = messages_array });
@@ -177,15 +203,13 @@ pub const OpenAIClient = struct {
         defer http_client.deinit();
 
         // Prepare request
-        const uri = try std.Uri.parse("https://api.openai.com/v1/chat/completions");
+        const uri = try std.Uri.parse("https://api.anthropic.com/v1/messages");
 
         var headers = std.http.Headers.init(allocator);
         defer headers.deinit();
 
-        const auth_header = try std.fmt.allocPrint(allocator, "Bearer {s}", .{self.api_key});
-        defer allocator.free(auth_header);
-
-        try headers.append("Authorization", auth_header);
+        try headers.append("x-api-key", self.api_key);
+        try headers.append("anthropic-version", "2023-06-01");
         try headers.append("Content-Type", "application/json");
 
         var request = try http_client.open(.POST, uri, .{
@@ -224,13 +248,11 @@ pub const OpenAIClient = struct {
                 defer event.deinit(allocator);
 
                 if (event.is_done) {
-                    // Send final chunk to callback
                     callback(.{ .content = "", .is_done = true }, user_data);
                     break;
                 }
 
                 if (event.content) |content| {
-                    // Send content chunk to callback
                     callback(.{ .content = content, .is_done = false }, user_data);
                 }
             }
@@ -238,7 +260,7 @@ pub const OpenAIClient = struct {
     }
 
     fn deinitImpl(ctx: *anyopaque) void {
-        const self: *OpenAIClient = @ptrCast(@alignCast(ctx));
+        const self: *AnthropicClient = @ptrCast(@alignCast(ctx));
         self.allocator.free(self.api_key);
         self.allocator.free(self.model);
         self.allocator.destroy(self);

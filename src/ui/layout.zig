@@ -4,8 +4,9 @@ const App = @import("../app.zig");
 const status_bar = @import("status_bar.zig");
 const chat_view = @import("chat_view.zig");
 const input_view = @import("input_view.zig");
+const modal_view = @import("modal_view.zig");
 
-pub fn draw(win: vaxis.Window, state: *const App.AppState) !void {
+pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
     const height = win.height;
     const width = win.width;
 
@@ -93,9 +94,14 @@ pub fn draw(win: vaxis.Window, state: *const App.AppState) !void {
         };
 
         var hints_segment = vaxis.Segment{
-            .text = " Tab: Mode | Ctrl+P: Select Model | Ctrl+Q: Quit",
+            .text = " Tab: Mode | Ctrl+P: Model | Ctrl+L: Clear | PgUp/PgDn: Scroll | Ctrl+Q: Quit",
             .style = hints_style,
         };
         _ = try hints_win.printSegment(hints_segment, .{});
+    }
+
+    // Modal overlay (if shown)
+    if (state.show_modal) {
+        try modal_view.draw(win, state);
     }
 }
