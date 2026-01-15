@@ -1,11 +1,12 @@
 .{
-    .name = "zcode",
+    .name = .zcode,
     .version = "0.1.0",
-    .minimum_zig_version = "0.13.0",
+    .fingerprint = 0x2311e0f764edbb16,
+    .minimum_zig_version = "0.15.0",
     .dependencies = .{
         .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis#v0.13.1",
-            .hash = "12200000000000000000000000000000000000000000000000000000000000000000",
+            .url = "git+https://github.com/rockorager/libvaxis#622d245b535d15469f1d898eeadaba7056df788b",
+            .hash = "1220de1411c8c7daf2c804a882bd8613716c026fa5e488b9f8765318dca5a9db0f6a",
         },
     },
     .paths = .{

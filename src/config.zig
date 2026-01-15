@@ -62,7 +62,7 @@ pub const Config = struct {
             break :blk null;
         };
 
-        config.qwen_key = std.process.getEnvVarOwned(allocator, "QWEN_API_KEY") catch |err| {
+        config.qwen_key = std.process.getEnvVarOwned(allocator, "QWEN_API_KEY") catch |err| blk: {
             if (err != error.EnvironmentVariableNotFound) return err;
             break :blk null;
         };

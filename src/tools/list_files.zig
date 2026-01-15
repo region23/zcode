@@ -3,7 +3,7 @@ const registry = @import("registry.zig");
 
 /// Resolve relative path to absolute path
 fn resolveAbsolutePath(path_str: []const u8, allocator: std.mem.Allocator) ![]const u8 {
-    var path = std.fs.path.resolve(allocator, &[_][]const u8{path_str}) catch |err| {
+    const path = std.fs.path.resolve(allocator, &[_][]const u8{path_str}) catch {
         // If resolve fails, try to use cwd + path
         const cwd = try std.process.getCwdAlloc(allocator);
         defer allocator.free(cwd);

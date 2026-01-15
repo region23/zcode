@@ -29,7 +29,7 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
     separator_win.clear();
     var i: usize = 0;
     while (i < width) : (i += 1) {
-        var segment = vaxis.Segment{
+const segment = vaxis.Segment{
             .text = "─",
             .style = .{ .fg = .{ .index = 8 } }, // Gray
         };
@@ -58,7 +58,7 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
         input_sep_win.clear();
         i = 0;
         while (i < width) : (i += 1) {
-            var segment = vaxis.Segment{
+const segment = vaxis.Segment{
                 .text = "─",
                 .style = .{ .fg = .{ .index = 8 } },
             };
@@ -93,7 +93,7 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
             .fg = .{ .index = 8 }, // Gray
         };
 
-        var hints_segment = vaxis.Segment{
+const hints_segment = vaxis.Segment{
             .text = " Tab: Mode | Ctrl+P: Model | Ctrl+L: Clear | PgUp/PgDn: Scroll | Ctrl+Q: Quit",
             .style = hints_style,
         };

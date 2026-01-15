@@ -20,7 +20,7 @@ pub fn draw(win: vaxis.Window, state: *const App.AppState) !void {
     );
     defer state.allocator.free(left_text);
 
-    var left_segment = vaxis.Segment{
+const left_segment = vaxis.Segment{
         .text = left_text,
         .style = bg_style,
     };
@@ -46,7 +46,7 @@ pub fn draw(win: vaxis.Window, state: *const App.AppState) !void {
     // Draw padding
     var i: usize = 0;
     while (i < padding) : (i += 1) {
-        var space_segment = vaxis.Segment{
+const space_segment = vaxis.Segment{
             .text = " ",
             .style = bg_style,
         };
@@ -54,7 +54,7 @@ pub fn draw(win: vaxis.Window, state: *const App.AppState) !void {
     }
 
     // Draw right text
-    var right_segment = vaxis.Segment{
+const right_segment = vaxis.Segment{
         .text = right_text,
         .style = bg_style,
     };

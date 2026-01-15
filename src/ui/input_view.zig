@@ -10,14 +10,14 @@ pub fn draw(win: vaxis.Window, state: *const App.AppState) !void {
     };
 
     // Draw prompt
-    var prompt_segment = vaxis.Segment{
+const prompt_segment = vaxis.Segment{
         .text = "> ",
         .style = prompt_style,
     };
     _ = try win.printSegment(prompt_segment, .{});
 
     // Draw input buffer
-    var input_segment = vaxis.Segment{
+const input_segment = vaxis.Segment{
         .text = state.input_buffer.items,
         .style = .{},
     };

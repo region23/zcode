@@ -49,7 +49,7 @@ pub fn draw(win: vaxis.Window, state: *const App.AppState) !void {
                 .height = .{ .limit = 1 },
             });
 
-            var prefix_segment = vaxis.Segment{
+const prefix_segment = vaxis.Segment{
                 .text = role_prefix,
                 .style = role_style,
             };
@@ -129,7 +129,7 @@ fn renderContent(
 
                     for (tokens) |token| {
                         const token_style = syntax.getTokenStyle(token.type);
-                        var segment = vaxis.Segment{
+const segment = vaxis.Segment{
                             .text = token.text,
                             .style = token_style,
                         };
@@ -145,7 +145,7 @@ fn renderContent(
                         .height = .{ .limit = 1 },
                     });
 
-                    var segment = vaxis.Segment{
+const segment = vaxis.Segment{
                         .text = line,
                         .style = .{ .fg = .{ .index = 8 } }, // Gray
                     };
@@ -185,7 +185,7 @@ fn renderPlainLine(win: vaxis.Window, line: []const u8, y: usize, style: vaxis.S
         .height = .{ .limit = 1 },
     });
 
-    var segment = vaxis.Segment{
+const segment = vaxis.Segment{
         .text = line,
         .style = style,
     };

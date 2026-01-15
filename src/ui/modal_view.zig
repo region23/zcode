@@ -98,7 +98,7 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
         .bold = true,
     };
 
-    var title_segment = vaxis.Segment{
+const title_segment = vaxis.Segment{
         .text = "Select Provider & Model",
         .style = title_style,
     };
@@ -112,7 +112,7 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
         .height = .{ .limit = 1 },
     });
 
-    var sep_segment = vaxis.Segment{
+const sep_segment = vaxis.Segment{
         .text = "─",
         .style = border_style,
     };
@@ -177,7 +177,7 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
             );
             defer allocator.free(text);
 
-            var segment = vaxis.Segment{
+const segment = vaxis.Segment{
                 .text = text,
                 .style = style,
             };
@@ -200,7 +200,7 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
             );
             defer allocator.free(text);
 
-            var segment = vaxis.Segment{
+const segment = vaxis.Segment{
                 .text = text,
                 .style = style,
             };
@@ -236,7 +236,7 @@ pub fn draw(win: vaxis.Window, state: *App.AppState) !void {
         .bg = .{ .index = 0 },
     };
 
-    var hints_segment = vaxis.Segment{
+const hints_segment = vaxis.Segment{
         .text = "↑↓: Navigate | Enter: Select | Esc: Cancel",
         .style = hints_style,
     };
@@ -252,10 +252,10 @@ fn drawBorder(win: vaxis.Window, style: vaxis.Style) !void {
         .height = .{ .limit = 1 },
     });
 
-    var corner_segment = vaxis.Segment{ .text = "┌", .style = style };
+const corner_segment = vaxis.Segment{ .text = "┌", .style = style };
     _ = try top_win.printSegment(corner_segment, .{});
 
-    var horizontal_segment = vaxis.Segment{ .text = "─", .style = style };
+const horizontal_segment = vaxis.Segment{ .text = "─", .style = style };
     var i: usize = 1;
     while (i < win.width - 1) : (i += 1) {
         _ = try top_win.printSegment(horizontal_segment, .{});
@@ -274,7 +274,7 @@ fn drawBorder(win: vaxis.Window, style: vaxis.Style) !void {
             .height = .{ .limit = 1 },
         });
 
-        var vertical_segment = vaxis.Segment{ .text = "│", .style = style };
+const vertical_segment = vaxis.Segment{ .text = "│", .style = style };
         _ = try left_win.printSegment(vertical_segment, .{});
 
         const right_win = win.child(.{
