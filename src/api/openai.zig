@@ -57,45 +57,34 @@ pub const OpenAIClient = struct {
         try request_obj.put("messages", .{ .array = messages_array });
 
         // Serialize to JSON
-        const request_json = try std.json.stringifyAlloc(allocator, std.json.Value{ .object = request_obj }, .{});
+        const request_json = try std.fmt.allocPrint(allocator, "{f}", .{std.json.fmt(std.json.Value{ .object = request_obj }, .{})});
         defer allocator.free(request_json);
 
         // Create HTTP client
         var http_client = std.http.Client{ .allocator = allocator };
         defer http_client.deinit();
 
-        // Prepare request
-        const uri = try std.Uri.parse("https://api.openai.com/v1/chat/completions");
-
-        var headers = std.http.Headers.init(allocator);
-        defer headers.deinit();
-
+        // Prepare headers
         const auth_header = try std.fmt.allocPrint(allocator, "Bearer {s}", .{self.api_key});
         defer allocator.free(auth_header);
 
-        try headers.append("Authorization", auth_header);
-        try headers.append("Content-Type", "application/json");
+        const headers = [_]std.http.Header{
+            .{ .name = "Authorization", .value = auth_header },
+            .{ .name = "Content-Type", .value = "application/json" },
+        };
 
-        var request = try http_client.open(.POST, uri, .{
-            .server_header_buffer = try allocator.alloc(u8, 8192),
-            .headers = headers,
-        });
-        defer request.deinit();
-
-        request.transfer_encoding = .{ .content_length = request_json.len };
-
-        try request.send();
-        try request.writeAll(request_json);
-        try request.finish();
-
-        try request.wait();
-
-        // Read response
-        var response_body = std.ArrayList(u8).init(allocator);
+        // Prepare response buffer
+        var response_body = std.array_list.AlignedManaged(u8, null).init(allocator);
         defer response_body.deinit();
 
-        const max_response_size = 10 * 1024 * 1024; // 10MB
-        try request.reader().readAllArrayList(&response_body, max_response_size);
+        // Send request
+        _ = try http_client.fetch(.{
+            .location = .{ .url = "https://api.openai.com/v1/chat/completions" },
+            .method = .POST,
+            .payload = request_json,
+            .extra_headers = &headers,
+            .response_writer = response_body.writer(),
+        });
 
         // Parse response JSON
         const parsed = try std.json.parseFromSlice(
@@ -169,48 +158,50 @@ pub const OpenAIClient = struct {
         try request_obj.put("messages", .{ .array = messages_array });
 
         // Serialize to JSON
-        const request_json = try std.json.stringifyAlloc(allocator, std.json.Value{ .object = request_obj }, .{});
+        const request_json = try std.fmt.allocPrint(allocator, "{f}", .{std.json.fmt(std.json.Value{ .object = request_obj }, .{})});
         defer allocator.free(request_json);
 
         // Create HTTP client
         var http_client = std.http.Client{ .allocator = allocator };
         defer http_client.deinit();
 
-        // Prepare request
-        const uri = try std.Uri.parse("https://api.openai.com/v1/chat/completions");
-
-        var headers = std.http.Headers.init(allocator);
-        defer headers.deinit();
-
+        // Prepare headers
         const auth_header = try std.fmt.allocPrint(allocator, "Bearer {s}", .{self.api_key});
         defer allocator.free(auth_header);
 
-        try headers.append("Authorization", auth_header);
-        try headers.append("Content-Type", "application/json");
+        const headers = [_]std.http.Header{
+            .{ .name = "Authorization", .value = auth_header },
+            .{ .name = "Content-Type", .value = "application/json" },
+        };
 
-        var request = try http_client.open(.POST, uri, .{
-            .server_header_buffer = try allocator.alloc(u8, 8192),
-            .headers = headers,
+        // Create request
+        const uri = try std.Uri.parse("https://api.openai.com/v1/chat/completions");
+        var req = try http_client.request(.POST, uri, .{
+            .extra_headers = &headers,
         });
-        defer request.deinit();
+        defer req.deinit();
 
-        request.transfer_encoding = .{ .content_length = request_json.len };
+        // Send request body
+        req.transfer_encoding = .{ .content_length = request_json.len };
+        try req.send();
+        try req.writeAll(request_json);
+        try req.finish();
 
-        try request.send();
-        try request.writeAll(request_json);
-        try request.finish();
-
-        try request.wait();
+        // Wait for response headers
+        try req.wait();
 
         // Stream response
         var parser = streaming.SSEParser.init(allocator);
         defer parser.deinit();
 
+        var transfer_buffer: [4096]u8 = undefined;
+        var response = try req.response(.{});
+        const http_reader = response.reader(&transfer_buffer);
+
         var read_buffer: [4096]u8 = undefined;
-        const reader = request.reader();
 
         while (true) {
-            const bytes_read = reader.read(&read_buffer) catch |err| {
+            const bytes_read = http_reader.read(&read_buffer) catch |err| {
                 if (err == error.EndOfStream) break;
                 return err;
             };

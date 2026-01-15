@@ -36,12 +36,12 @@ pub const Message = struct {
 };
 
 pub const Conversation = struct {
-    messages: std.ArrayList(Message),
+    messages: std.array_list.AlignedManaged(Message, null),
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) Conversation {
         return .{
-            .messages = std.ArrayList(Message).init(allocator),
+            .messages = std.array_list.AlignedManaged(Message, null).init(allocator),
             .allocator = allocator,
         };
     }

@@ -57,7 +57,7 @@ pub const OpenRouterClient = struct {
 
         try request_obj.put("messages", .{ .array = messages_array });
 
-        return try std.json.stringifyAlloc(allocator, std.json.Value{ .object = request_obj }, .{});
+        return try std.fmt.allocPrint(allocator, "{f}", .{std.json.fmt(std.json.Value{ .object = request_obj }, .{})});
     }
 
     fn sendMessageImpl(ctx: *anyopaque, messages: []const common.Message, allocator: std.mem.Allocator) ![]u8 {
@@ -73,37 +73,28 @@ pub const OpenRouterClient = struct {
         // OpenRouter endpoint
         const uri = try std.Uri.parse("https://openrouter.ai/api/v1/chat/completions");
 
-        var headers = std.http.Headers.init(allocator);
-        defer headers.deinit();
-
         const auth_header = try std.fmt.allocPrint(allocator, "Bearer {s}", .{self.api_key});
         defer allocator.free(auth_header);
 
-        try headers.append("Authorization", auth_header);
-        try headers.append("Content-Type", "application/json");
-        try headers.append("HTTP-Referer", "https://github.com/yourusername/zcode"); // Required by OpenRouter
-        try headers.append("X-Title", "zcode"); // Optional but recommended
+        const headers = [_]std.http.Header{
+            .{ .name = "Authorization", .value = auth_header },
+            .{ .name = "Content-Type", .value = "application/json" },
+            .{ .name = "HTTP-Referer", .value = "https://github.com/yourusername/zcode" },
+            .{ .name = "X-Title", .value = "zcode" },
+        };
 
-        var request = try http_client.open(.POST, uri, .{
-            .server_header_buffer = try allocator.alloc(u8, 8192),
-            .headers = headers,
-        });
-        defer request.deinit();
-
-        request.transfer_encoding = .{ .content_length = request_json.len };
-
-        try request.send();
-        try request.writeAll(request_json);
-        try request.finish();
-
-        try request.wait();
-
-        // Read response
-        var response_body = std.ArrayList(u8).init(allocator);
+        // Prepare response buffer
+        var response_body = std.array_list.AlignedManaged(u8, null).init(allocator);
         defer response_body.deinit();
 
-        const max_response_size = 10 * 1024 * 1024;
-        try request.reader().readAllArrayList(&response_body, max_response_size);
+        // Send request
+        _ = try http_client.fetch(.{
+            .location = .{ .uri = uri },
+            .method = .POST,
+            .payload = request_json,
+            .extra_headers = &headers,
+            .response_writer = response_body.writer(),
+        });
 
         // Parse response (OpenAI-compatible format)
         const parsed = try std.json.parseFromSlice(
